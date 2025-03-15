@@ -13,30 +13,59 @@ import (
 	"github.com/franoliveto/insight"
 )
 
+func doVersion(c *insight.Client, system, name, version string) error {
+	var v *insight.Version
+	v, err := c.GetVersion(system, name, version)
+	if err != nil {
+		return err
+	}
+	fmt.Println(*v)
+	return nil
+}
+
+func doPackage(c *insight.Client, system, name string) error {
+	var p *insight.Package
+	p, err := c.GetPackage(system, name)
+	if err != nil {
+		return err
+	}
+	fmt.Println(*p)
+	return nil
+}
+
 func main() {
 	log.SetFlags(0)
-	flag.Usage = func() {
-		fmt.Fprintf(os.Stderr, "Usage: %s system name\n", os.Args[0])
-		flag.PrintDefaults()
-	}
 	flag.Parse()
-	if flag.NArg() != 2 {
-		flag.Usage()
+
+	if flag.NArg() == 0 {
+		fmt.Fprintln(os.Stderr, "Usage: x command [args]")
 		os.Exit(1)
 	}
-	system := flag.Arg(0)
-	name := flag.Arg(1)
 
 	client := insight.NewClient("", nil)
 
-	p, err := client.GetPackage(system, name)
-	if err != nil {
-		log.Fatal(err)
+	switch cmd := flag.Arg(0); cmd {
+	case "package":
+		if flag.NArg() < 3 {
+			fmt.Fprintln(os.Stderr, "usage: x package system name")
+			os.Exit(1)
+		}
+		system := flag.Arg(1)
+		name := flag.Arg(2)
+		if err := doPackage(client, system, name); err != nil {
+			log.Fatal(err)
+		}
+	case "version":
+		if flag.NArg() < 4 {
+			fmt.Fprintln(os.Stderr, "usage: x version system name version")
+			os.Exit(1)
+		}
+		system := flag.Arg(1)
+		name := flag.Arg(2)
+		version := flag.Arg(3)
+		if err := doVersion(client, system, name, version); err != nil {
+			log.Fatal(err)
+		}
 	}
 
-	fmt.Printf("System: %s\nPackage: %s\n", p.PackageKey.System, p.PackageKey.Name)
-	fmt.Println("Versions:")
-	for _, v := range p.Versions {
-		fmt.Printf("%s\n", v.VersionKey.Version)
-	}
 }

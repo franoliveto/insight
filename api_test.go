@@ -5,10 +5,12 @@
 package insight
 
 import (
+	"encoding/json"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"reflect"
+	"strings"
 	"testing"
 )
 
@@ -55,5 +57,30 @@ func TestGetPackageError(t *testing.T) {
 	_, err := c.GetPackage("bar", "baz")
 	if err == nil {
 		t.Errorf("expected error")
+	}
+}
+
+func TestGetVersion(t *testing.T) {
+	body := `{"versionKey":{"system":"GO","name":"rsc.io/github","version":"v0.4.1"},"publishedAt":"2024-06-21T16:57:04Z","isDefault":false,"licenses":["BSD-3-Clause"],"advisoryKeys":[],"links":[{"label":"SOURCE_REPO","url":"https://github.com/rsc/github"}],"slsaProvenances":[],"attestations":[],"registries":[],"relatedProjects":[{"projectKey":{"id":"github.com/rsc/github"},"relationProvenance":"GO_ORIGIN","relationType":"SOURCE_REPO"}]}`
+
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		fmt.Fprint(w, body)
+	}))
+	defer ts.Close()
+
+	want := new(Version)
+	r := strings.NewReader(body)
+	if err := json.NewDecoder(r).Decode(want); err != nil {
+		t.Errorf("%v", err)
+	}
+
+	c := NewClient(ts.URL, nil)
+	got, err := c.GetVersion("go", "rsc.io/github", "v0.4.1")
+	if err != nil {
+		t.Errorf("c.GetVersion error: %v", err)
+	}
+
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("c.GetVersion() == %v; want %v", got, want)
 	}
 }
