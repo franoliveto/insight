@@ -96,6 +96,27 @@ type Attestation struct {
 	Commit string
 }
 
+func (c *Client) get(path string, v any) error {
+	url, _ := url.JoinPath(c.BasePath, path)
+	resp, err := c.client.Get(url)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		data, err := io.ReadAll(resp.Body)
+		if err != nil {
+			return fmt.Errorf("%s", resp.Status)
+		}
+		return fmt.Errorf("%s", string(data))
+	}
+	if err := json.NewDecoder(resp.Body).Decode(v); err != nil {
+		return err
+	}
+	return nil
+}
+
 // Package holds information about a package, including a list of its available
 // versions, with the default version marked if known.
 type Package struct {
@@ -132,24 +153,6 @@ func (c *Client) GetPackage(system, name string) (*Package, error) {
 		return nil, err
 	}
 	return p, nil
-}
-
-// Project holds information about a project hosted by GitHub, GitLab, or
-// Bitbucket.
-type Project struct {
-	// The identifier for the project.
-	ProjectKey ProjectKey
-
-	// How the mapping between project and package version was discovered.
-	//
-	// Can be one of SLSA_ATTESTATION, GO_ORIGIN, PYPI_PUBLISH_ATTESTATION,
-	// UNVERIFIED_METADATA.
-	RelationProvenance string
-
-	// What the relationship between the project and the package version is.
-	//
-	// Can be one of SOURCE_REPO, ISSUE_TRACKER.
-	RelationType string
 }
 
 // Version holds information about a package version.
@@ -213,7 +216,21 @@ type Version struct {
 	Registries []string
 
 	// Projects that are related to this package version.
-	RelatedProjects []Project
+	RelatedProjects []struct {
+		// The identifier for the project.
+		ProjectKey ProjectKey
+
+		// How the mapping between project and package version was discovered.
+		//
+		// Can be one of SLSA_ATTESTATION, GO_ORIGIN, PYPI_PUBLISH_ATTESTATION,
+		// UNVERIFIED_METADATA.
+		RelationProvenance string
+
+		// What the relationship between the project and the package version is.
+		//
+		// Can be one of SOURCE_REPO, ISSUE_TRACKER.
+		RelationType string
+	}
 }
 
 // GetVersion returns information about a specific package version, including its
@@ -325,23 +342,126 @@ func (c *Client) GetDependencies(key VersionKey) (*Dependencies, error) {
 	return d, nil
 }
 
-func (c *Client) get(path string, v any) error {
-	url, _ := url.JoinPath(c.BasePath, path)
-	resp, err := c.client.Get(url)
-	if err != nil {
-		return err
-	}
-	defer resp.Body.Close()
+// Project holds information about a project hosted by GitHub, GitLab, or
+// Bitbucket.
+type Project struct {
+	// The identifier for the project.
+	ProjectKey ProjectKey
 
-	if resp.StatusCode != http.StatusOK {
-		data, err := io.ReadAll(resp.Body)
-		if err != nil {
-			return fmt.Errorf("%s", resp.Status)
+	// The number of open issues reported by the project host.
+	// Only available for GitHub and GitLab.
+	OpenIssuesCount int
+
+	// The number of stars reported by the project host.
+	// Only available for GitHub and GitLab.
+	StarsCount int
+
+	//The number of forks reported by the project host.
+	//Only available for GitHub and GitLab.
+	ForksCount int
+
+	// The license reported by the project host.
+	License string
+
+	// The description reported by the project host
+	Description string
+
+	// The homepage reported by the project host.
+	Homepage string
+
+	// An [OpenSSF Scorecard](https://github.com/ossf/scorecard) for the project,
+	// if one is available.
+	Scorecard Scorecard
+
+	// Details of this project's testing by the
+	// [OSS-Fuzz service](https://google.github.io/oss-fuzz/).
+	// Only set if the project is tested by OSS-Fuzz.
+	OSSFuzz OSSFuzzDetails
+}
+
+type Scorecard struct {
+	// The date at which the scorecard was produced.
+	// The time portion of this field is midnight UTC.
+	Date string
+
+	// The source code repository and commit the scorecard was produced from.
+	Repository struct {
+		// The source code repository the scorecard was produced from.
+		Name string
+
+		// The source code commit the scorecard was produced from.
+		Commit string
+	}
+
+	// The version and commit of the Scorecard program used to produce the
+	// scorecard.
+	Scorecard struct {
+		// The version of the Scorecard program used to produce the scorecard.
+		Version string
+
+		// The commit of the Scorecard program used to produce the scorecard.
+		Commit string
+	}
+
+	// The results of the
+	// [Scorecard Checks](https://github.com/ossf/scorecard#scorecard-checks)
+	// performed on the project.
+	Checks []struct {
+		// The name of the check.
+		Name string
+
+		// Human-readable documentation for the check.
+		Documentation struct {
+			// A short description of the check.
+			ShortDescription string
+
+			// A link to more details about the check.
+			URL string
 		}
-		return fmt.Errorf("%s", string(data))
+
+		// A score in the range [0,10]. A higher score is better.
+		// A negative score indicates that the check did not run successfully.
+		Score int
+
+		// The reason for the score.
+		Reason string
+
+		// Further details regarding the check.
+		Details []string
 	}
-	if err := json.NewDecoder(resp.Body).Decode(v); err != nil {
-		return err
+
+	// A weighted average score in the range [0,10]. A higher score is better.
+	OverallScore float64
+
+	// Additional metadata associated with the scorecard.
+	Metadata []string
+}
+
+type OSSFuzzDetails struct {
+	// The total number of lines of code in the project.
+	LineCount int
+
+	// The number of lines of code covered by fuzzing.
+	LineCoverCount int
+
+	// The date the fuzz test that produced the coverage information was run
+	// against this project.
+	// The time portion of this field is midnight UTC.
+	Date string
+
+	// The URL containing the configuration for the project in the
+	// OSS-Fuzz repository.
+	ConfigURL string
+}
+
+// GetProject returns information about projects hosted by GitHub, GitLab,
+// or BitBucket.
+func (c *Client) GetProject(id string) (*Project, error) {
+	path := "projects/" + url.PathEscape(id)
+	p := new(Project)
+	err := c.get(path, p)
+	if err != nil {
+		return nil, err
 	}
-	return nil
+	return p, nil
 }

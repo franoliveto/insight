@@ -79,6 +79,16 @@ func main() {
 			log.Fatal(err)
 		}
 		fmt.Println(*d)
+	case "project":
+		if flag.NArg() < 2 {
+			fmt.Fprintln(os.Stderr, "usage: x project id")
+			os.Exit(1)
+		}
+		p, err := client.GetProject(flag.Arg(1))
+		if err != nil {
+			log.Fatal(err)
+		}
+		fmt.Println(*p)
 	}
 
 }
