@@ -66,6 +66,19 @@ func main() {
 		if err := doVersion(client, system, name, version); err != nil {
 			log.Fatal(err)
 		}
+	case "dependencies":
+		if flag.NArg() < 4 {
+			fmt.Fprintln(os.Stderr, "usage: x dependencies system name version")
+			os.Exit(1)
+		}
+		system := flag.Arg(1)
+		name := flag.Arg(2)
+		version := flag.Arg(3)
+		d, err := client.GetDependencies(insight.VersionKey{System: system, Name: name, Version: version})
+		if err != nil {
+			log.Fatal(err)
+		}
+		fmt.Println(*d)
 	}
 
 }

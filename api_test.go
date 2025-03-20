@@ -14,6 +14,15 @@ import (
 	"testing"
 )
 
+func decode(data string, v any) error {
+	r := strings.NewReader(data)
+	err := json.NewDecoder(r).Decode(v)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
 func TestGetPackage(t *testing.T) {
 	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		fmt.Fprint(w, `{"packageKey":{"system":"GO","name":"foo"},"versions":[{"versionKey":{"system":"GO","name":"foo","version":"v0.1.0"},"publishedAt":"2019-07-25T19:01:57Z","isDefault":false},{"versionKey":{"system":"GO","name":"foo","version":"v0.2.0"},"publishedAt":"2019-07-25T19:02:00Z","isDefault":false}]}`)
@@ -82,5 +91,28 @@ func TestGetVersion(t *testing.T) {
 
 	if !reflect.DeepEqual(got, want) {
 		t.Errorf("c.GetVersion() == %v; want %v", got, want)
+	}
+}
+
+func TestGetDependencies(t *testing.T) {
+	body := `{"nodes":[{"versionKey":{"system":"NPM", "name":"react", "version":"18.2.0"}, "bundled":false, "relation":"SELF", "errors":[]}, {"versionKey":{"system":"NPM", "name":"js-tokens", "version":"4.0.0"}, "bundled":false, "relation":"INDIRECT", "errors":[]}, {"versionKey":{"system":"NPM", "name":"loose-envify", "version":"1.4.0"}, "bundled":false, "relation":"DIRECT", "errors":[]}], "edges":[{"fromNode":0, "toNode":2, "requirement":"^1.1.0"}, {"fromNode":2, "toNode":1, "requirement":"^3.0.0 || ^4.0.0"}], "error":""}`
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		fmt.Fprint(w, body)
+	}))
+	defer ts.Close()
+
+	want := new(Dependencies)
+	if err := decode(body, want); err != nil {
+		t.Errorf("%v", err)
+	}
+
+	c := NewClient(ts.URL, nil)
+	got, err := c.GetDependencies(VersionKey{System: "npm", Name: "react", Version: "18.2.0"})
+	if err != nil {
+		t.Errorf("%v", err)
+	}
+
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("c.GetDependencies() == %v; want %v", got, want)
 	}
 }

@@ -244,3 +244,104 @@ func (c *Client) GetVersion(system, name, version string) (*Version, error) {
 	}
 	return v, nil
 }
+
+// Node represents a node in a resolved dependency graph.
+type Node struct {
+	// The package version represented by this node. Note that the package and
+	// version name may differ from the names in the request, if provided, due
+	// to canonicalization.
+	//
+	// In some systems, a graph may contain multiple nodes for the same package
+	// version.
+	VersionKey VersionKey
+
+	// If true, this is a bundled dependency.
+	//
+	// For bundled dependencies, the package name in the version key encodes
+	// how the dependency is bundled. As an example, a bundled dependency with
+	// a name like "a>1.2.3>b>c" is part of the dependency graph of package "a"
+	// at version "1.2.3", and has the local name "c". It may or may not be the
+	// same as a package with the global name "c".
+	Bundled bool
+
+	// Whether this node represents a direct or indirect dependency within this
+	// dependency graph. Note that it's possible for a dependency to be both
+	// direct and indirect; if so, it is marked as direct.
+	//
+	// Can be one of SELF, DIRECT, INDIRECT.
+	Relation string
+
+	// Errors associated with this node of the graph, such as an unresolved
+	// dependency requirement. An error on a node may imply the graph as a
+	// whole is incorrect. These error messages have no defined format and are
+	// intended for human consumption.
+	Errors []string
+}
+
+// Edge represents a directed edge in a resolved dependency graph: a
+// dependency relation between two nodes.
+type Edge struct {
+	// The node declaring the dependency, specified as an index into the list of
+	// nodes.
+	FromNode int
+
+	// The node resolving the dependency, specified as an index into the list of
+	// nodes.
+	ToNode int
+
+	// The requirement resolved by this edge, as declared by the "from" node.
+	// The meaning of this field is system-specific. As an example, in npm, the
+	// requirement "^1.0.0" may be resolved by the version "1.2.3".
+	Requirement string
+}
+
+// Dependencies holds a resolved dependency graph for a package version.
+//
+// The dependency graph should be similar to one produced by installing the
+// package version on a generic 64-bit Linux system, with no other dependencies
+// present. The precise meaning of this varies from system to system.
+type Dependencies struct {
+	// The nodes of the dependency graph. The first node is the root of the graph.
+	Nodes []Node
+
+	// The edges of the dependency graph.
+	Edges []Edge
+
+	// Any error associated with the dependency graph that is not specific to a
+	// node. An error here may imply the graph as a whole is incorrect.
+	// This error message has no defined format and is intended for human
+	// consumption.
+	Error string
+}
+
+// GetDependencies returns a resolved dependency graph for the given package version.
+func (c *Client) GetDependencies(key VersionKey) (*Dependencies, error) {
+	path := "systems/" + url.PathEscape(key.System) + "/packages/" + url.PathEscape(key.Name) + "/versions/" + url.PathEscape(key.Version) + ":dependencies"
+	d := new(Dependencies)
+	err := c.get(path, d)
+	if err != nil {
+		return nil, err
+	}
+	return d, nil
+}
+
+func (c *Client) get(path string, v any) error {
+	url, _ := url.JoinPath(c.BasePath, path)
+	resp, err := c.client.Get(url)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		data, err := io.ReadAll(resp.Body)
+		if err != nil {
+			return fmt.Errorf("%s", resp.Status)
+		}
+		return fmt.Errorf("%s", string(data))
+	}
+	if err := json.NewDecoder(resp.Body).Decode(v); err != nil {
+		return err
+	}
+	return nil
+}
