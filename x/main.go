@@ -42,7 +42,7 @@ func main() {
 		os.Exit(1)
 	}
 
-	client := insight.NewClient("", nil)
+	client := insight.NewClient()
 
 	switch cmd := flag.Arg(0); cmd {
 	case "package":

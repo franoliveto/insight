@@ -4,28 +4,14 @@
 
 package insight
 
-import (
-	"net/http"
-)
-
 const basePath = "https://api.deps.dev/v3"
 
 // Client is a client for the deps.dev API.
 type Client struct {
 	BasePath string // API endpoint base URL
-	client   *http.Client
 }
 
-// NewClient returns a new deps.dev API client using the provided http.Client as transport.
-func NewClient(endpoint string, c *http.Client) *Client {
-	if c == nil {
-		c = http.DefaultClient
-	}
-	if endpoint == "" {
-		endpoint = basePath
-	}
-	return &Client{
-		BasePath: endpoint,
-		client:   c,
-	}
+// NewClient returns a new deps.dev API client.
+func NewClient() *Client {
+	return &Client{BasePath: basePath}
 }

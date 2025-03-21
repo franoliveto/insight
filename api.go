@@ -1,3 +1,7 @@
+// Copyright 2025 Francisco Oliveto. All rights reserved.
+// Use of this source code is governed by a BSD-style
+// license that can be found in the LICENSE file.
+
 package insight
 
 import (
@@ -98,7 +102,7 @@ type Attestation struct {
 
 func (c *Client) get(path string, v any) error {
 	url, _ := url.JoinPath(c.BasePath, path)
-	resp, err := c.client.Get(url)
+	resp, err := http.Get(url)
 	if err != nil {
 		return err
 	}
@@ -129,30 +133,12 @@ type Package struct {
 
 // GetPackage returns information about a package, including a list of its available versions.
 func (c *Client) GetPackage(system, name string) (*Package, error) {
-	url := c.BasePath + "/systems/" + url.PathEscape(system) + "/packages/" + url.PathEscape(name)
-	req, err := http.NewRequest("GET", url, nil)
-	if err != nil {
+	path := "/systems/" + url.PathEscape(system) + "/packages/" + url.PathEscape(name)
+	var reply Package
+	if err := c.get(path, &reply); err != nil {
 		return nil, err
 	}
-	resp, err := c.client.Do(req)
-	if err != nil {
-		return nil, err
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		data, err := io.ReadAll(resp.Body)
-		if err != nil {
-			return nil, fmt.Errorf("%s", resp.Status)
-		}
-		return nil, fmt.Errorf("%s", string(data))
-	}
-
-	p := new(Package)
-	if err := json.NewDecoder(resp.Body).Decode(p); err != nil {
-		return nil, err
-	}
-	return p, nil
+	return &reply, nil
 }
 
 // Version holds information about a package version.
@@ -236,30 +222,12 @@ type Version struct {
 // GetVersion returns information about a specific package version, including its
 // licenses and any security advisories known to affect it.
 func (c *Client) GetVersion(system, name, version string) (*Version, error) {
-	url := c.BasePath + "/systems/" + url.PathEscape(system) + "/packages/" + url.PathEscape(name) + "/versions/" + version
-	req, err := http.NewRequest("GET", url, nil)
-	if err != nil {
+	path := "/systems/" + url.PathEscape(system) + "/packages/" + url.PathEscape(name) + "/versions/" + version
+	var reply Version
+	if err := c.get(path, &reply); err != nil {
 		return nil, err
 	}
-	resp, err := c.client.Do(req)
-	if err != nil {
-		return nil, err
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		data, err := io.ReadAll(resp.Body)
-		if err != nil {
-			return nil, fmt.Errorf("%s", resp.Status)
-		}
-		return nil, fmt.Errorf("%s", string(data))
-	}
-
-	v := new(Version)
-	if err := json.NewDecoder(resp.Body).Decode(v); err != nil {
-		return nil, err
-	}
-	return v, nil
+	return &reply, nil
 }
 
 // Node represents a node in a resolved dependency graph.
@@ -333,13 +301,12 @@ type Dependencies struct {
 
 // GetDependencies returns a resolved dependency graph for the given package version.
 func (c *Client) GetDependencies(key VersionKey) (*Dependencies, error) {
-	path := "systems/" + url.PathEscape(key.System) + "/packages/" + url.PathEscape(key.Name) + "/versions/" + url.PathEscape(key.Version) + ":dependencies"
-	d := new(Dependencies)
-	err := c.get(path, d)
-	if err != nil {
+	path := "/systems/" + url.PathEscape(key.System) + "/packages/" + url.PathEscape(key.Name) + "/versions/" + url.PathEscape(key.Version) + ":dependencies"
+	var reply Dependencies
+	if err := c.get(path, &reply); err != nil {
 		return nil, err
 	}
-	return d, nil
+	return &reply, nil
 }
 
 // Project holds information about a project hosted by GitHub, GitLab, or
@@ -457,11 +424,10 @@ type OSSFuzzDetails struct {
 // GetProject returns information about projects hosted by GitHub, GitLab,
 // or BitBucket.
 func (c *Client) GetProject(id string) (*Project, error) {
-	path := "projects/" + url.PathEscape(id)
-	p := new(Project)
-	err := c.get(path, p)
-	if err != nil {
+	path := "/projects/" + url.PathEscape(id)
+	var reply Project
+	if err := c.get(path, &reply); err != nil {
 		return nil, err
 	}
-	return p, nil
+	return &reply, nil
 }

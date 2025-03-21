@@ -45,7 +45,8 @@ func TestGetPackage(t *testing.T) {
 		},
 	}
 
-	c := NewClient(ts.URL, nil)
+	c := NewClient()
+	c.BasePath = ts.URL
 	got, err := c.GetPackage("go", "foo")
 	if err != nil {
 		t.Errorf("c.GetPackage error: %v", err)
@@ -62,7 +63,8 @@ func TestGetPackageError(t *testing.T) {
 	}))
 	defer ts.Close()
 
-	c := NewClient(ts.URL, nil)
+	c := NewClient()
+	c.BasePath = ts.URL
 	_, err := c.GetPackage("bar", "baz")
 	if err == nil {
 		t.Errorf("expected error")
@@ -83,7 +85,8 @@ func TestGetVersion(t *testing.T) {
 		t.Errorf("%v", err)
 	}
 
-	c := NewClient(ts.URL, nil)
+	c := NewClient()
+	c.BasePath = ts.URL
 	got, err := c.GetVersion("go", "rsc.io/github", "v0.4.1")
 	if err != nil {
 		t.Errorf("c.GetVersion error: %v", err)
@@ -106,7 +109,8 @@ func TestGetDependencies(t *testing.T) {
 		t.Errorf("%v", err)
 	}
 
-	c := NewClient(ts.URL, nil)
+	c := NewClient()
+	c.BasePath = ts.URL
 	got, err := c.GetDependencies(VersionKey{System: "npm", Name: "react", Version: "18.2.0"})
 	if err != nil {
 		t.Errorf("%v", err)
@@ -129,7 +133,8 @@ func TestGetProject(t *testing.T) {
 		t.Errorf("%v", err)
 	}
 
-	c := NewClient(ts.URL, nil)
+	c := NewClient()
+	c.BasePath = ts.URL
 	got, err := c.GetProject("github.com/robpike/lisp")
 	if err != nil {
 		t.Errorf("%v", err)
