@@ -5,10 +5,6 @@
 package insight
 
 import (
-	"encoding/json"
-	"fmt"
-	"io"
-	"net/http"
 	"net/url"
 )
 
@@ -98,26 +94,6 @@ type Attestation struct {
 
 	// The commit of the source code repository the version was built from.
 	Commit string
-}
-
-func (c *Client) get(path string, v any) error {
-	url, _ := url.JoinPath(c.BasePath, path)
-	resp, err := http.Get(url)
-	if err != nil {
-		return err
-	}
-	defer resp.Body.Close()
-	data, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return err
-	}
-	if resp.StatusCode != http.StatusOK {
-		return fmt.Errorf("%s", string(data))
-	}
-	if err := json.Unmarshal(data, v); err != nil {
-		return err
-	}
-	return nil
 }
 
 // Package holds information about a package, including a list of its available

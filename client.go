@@ -4,6 +4,14 @@
 
 package insight
 
+import (
+	"encoding/json"
+	"fmt"
+	"io"
+	"net/http"
+	"net/url"
+)
+
 const basePath = "https://api.deps.dev/v3"
 
 // Client is a client for the deps.dev API.
@@ -14,4 +22,24 @@ type Client struct {
 // NewClient returns a new deps.dev API client.
 func NewClient() *Client {
 	return &Client{BasePath: basePath}
+}
+
+func (c *Client) get(path string, v any) error {
+	url, _ := url.JoinPath(c.BasePath, path)
+	resp, err := http.Get(url)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+	data, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return err
+	}
+	if resp.StatusCode != http.StatusOK {
+		return fmt.Errorf("%s", string(data))
+	}
+	if err := json.Unmarshal(data, v); err != nil {
+		return err
+	}
+	return nil
 }
