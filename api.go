@@ -430,3 +430,37 @@ func (c *Client) GetProject(id string) (*Project, error) {
 	}
 	return &reply, nil
 }
+
+type ProjectPackageVersions struct {
+	// The versions that were built from the source code contained in this project.
+	Versions []struct {
+		// The identifier for the version.
+		VersionKey VersionKey
+		// The SLSA provenance statements that link the version to the project. This
+		// is only populated for npm package versions. See the 'attestations' field
+		// for more attestations (including SLSA provenance) for all systems.
+		SLSAProvenances []SLSAProvenance
+		// Attestations that link the version to the project.
+		Attestation []Attestation
+		// What the relationship between the project and the package version is.
+		// Can be one of SOURCE_REPO, ISSUE_TRACKER.
+		RelationType string
+		// How the mapping between project and package version was discovered.
+		// Can be one of SLSA_ATTESTATION, GO_ORIGIN, PYPI_PUBLISH_ATTESTATION,
+		// UNVERIFIED_METADATA.
+		RelationProvenance string
+	}
+}
+
+// GetProjectPackageVersions returns known mappings between the requested project
+// and package versions.
+// At most 1500 package versions are returned. Mappings which were derived from
+// attestations are served first.
+func (c *Client) GetProjectPackageVersions(key ProjectKey) (*ProjectPackageVersions, error) {
+	path := "/projects/" + url.PathEscape(key.ID) + ":packageversions"
+	var reply ProjectPackageVersions
+	if err := c.get(path, &reply); err != nil {
+		return nil, err
+	}
+	return &reply, nil
+}

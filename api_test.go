@@ -144,3 +144,25 @@ func TestGetProject(t *testing.T) {
 		t.Errorf("c.GetProject() == %v; want %v", got, want)
 	}
 }
+
+func TestGetProjectPackageVersions(t *testing.T) {
+	body := `{"versions":[{"versionKey":{"system":"GO", "name":"robpike.io/lisp", "version":"v0.0.0-20241117212301-e311180f2a0d"}, "relationType":"SOURCE_REPO", "relationProvenance":"GO_ORIGIN", "slsaProvenances":[], "attestations":[]}]}`
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		fmt.Fprint(w, body)
+	}))
+	defer ts.Close()
+
+	c := NewClient()
+	want := new(ProjectPackageVersions)
+	if err := decode(body, want); err != nil {
+		t.Errorf("%v", err)
+	}
+	got, err := c.GetProjectPackageVersions(ProjectKey{ID: "github.com/robpike/lisp"})
+	if err != nil {
+		t.Errorf("%v", err)
+	}
+
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("c.GetProjectPackageVersions() == %v; want %v", got, want)
+	}
+}
