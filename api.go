@@ -464,3 +464,34 @@ func (c *Client) GetProjectPackageVersions(key ProjectKey) (*ProjectPackageVersi
 	}
 	return &reply, nil
 }
+
+// Advisory holds information about a security advisory hosted by OSV.
+type Advisory struct {
+	// The identifier for the security advisory.
+	AdvisoryKey AdvisoryKey
+
+	// The URL of the security advisory.
+	URL string
+
+	// A brief human-readable description.
+	Title string
+
+	// Other identifiers used for the advisory, including CVEs.
+	Aliases []string
+
+	// he severity of the advisory as a CVSS v3 score in the range [0,10].
+	// A higher score represents greater severity.
+	CVSS3Score float32
+
+	// The severity of the advisory as a CVSS v3 vector string.
+	CVSS3Vector string
+}
+
+func (c *Client) GetAdvisory(key AdvisoryKey) (*Advisory, error) {
+	path := "/advisories/" + url.PathEscape(key.ID)
+	var reply Advisory
+	if err := c.get(path, &reply); err != nil {
+		return nil, err
+	}
+	return &reply, nil
+}

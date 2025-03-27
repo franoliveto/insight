@@ -153,10 +153,12 @@ func TestGetProjectPackageVersions(t *testing.T) {
 	defer ts.Close()
 
 	c := NewClient()
+
 	want := new(ProjectPackageVersions)
 	if err := decode(body, want); err != nil {
 		t.Errorf("%v", err)
 	}
+
 	got, err := c.GetProjectPackageVersions(ProjectKey{ID: "github.com/robpike/lisp"})
 	if err != nil {
 		t.Errorf("%v", err)
@@ -164,5 +166,29 @@ func TestGetProjectPackageVersions(t *testing.T) {
 
 	if !reflect.DeepEqual(got, want) {
 		t.Errorf("c.GetProjectPackageVersions() == %v; want %v", got, want)
+	}
+}
+
+func TestGetAdvisory(t *testing.T) {
+	body := `{"advisoryKey":{"id":"GHSA-2qrg-x229-3v8q"}, "url":"https://osv.dev/vulnerability/GHSA-2qrg-x229-3v8q", "title":"Deserialization of Untrusted Data in Log4j", "aliases":["CVE-2019-17571"], "cvss3Score":9.8, "cvss3Vector":"CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:H/A:H"}`
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		fmt.Fprint(w, body)
+	}))
+	defer ts.Close()
+
+	c := NewClient()
+
+	want := new(Advisory)
+	if err := decode(body, want); err != nil {
+		t.Errorf("%v", err)
+	}
+
+	got, err := c.GetAdvisory(AdvisoryKey{ID: "GHSA-2qrg-x229-3v8q"})
+	if err != nil {
+		t.Errorf("%v", err)
+	}
+
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("c.GetAdvisory() == %v; want %v", got, want)
 	}
 }
