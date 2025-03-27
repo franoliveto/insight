@@ -107,15 +107,14 @@ func (c *Client) get(path string, v any) error {
 		return err
 	}
 	defer resp.Body.Close()
-
+	data, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return err
+	}
 	if resp.StatusCode != http.StatusOK {
-		data, err := io.ReadAll(resp.Body)
-		if err != nil {
-			return fmt.Errorf("%s", resp.Status)
-		}
 		return fmt.Errorf("%s", string(data))
 	}
-	if err := json.NewDecoder(resp.Body).Decode(v); err != nil {
+	if err := json.Unmarshal(data, v); err != nil {
 		return err
 	}
 	return nil
