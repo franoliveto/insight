@@ -111,7 +111,7 @@ func TestGetDependencies(t *testing.T) {
 
 	c := NewClient()
 	c.BasePath = ts.URL
-	got, err := c.GetDependencies(VersionKey{System: "npm", Name: "react", Version: "18.2.0"})
+	got, err := c.GetDependencies("npm", "react", "18.2.0")
 	if err != nil {
 		t.Errorf("%v", err)
 	}
@@ -159,7 +159,7 @@ func TestGetProjectPackageVersions(t *testing.T) {
 		t.Errorf("%v", err)
 	}
 
-	got, err := c.GetProjectPackageVersions(ProjectKey{ID: "github.com/robpike/lisp"})
+	got, err := c.GetProjectPackageVersions("github.com/robpike/lisp")
 	if err != nil {
 		t.Errorf("%v", err)
 	}
@@ -183,7 +183,7 @@ func TestGetAdvisory(t *testing.T) {
 		t.Errorf("%v", err)
 	}
 
-	got, err := c.GetAdvisory(AdvisoryKey{ID: "GHSA-2qrg-x229-3v8q"})
+	got, err := c.GetAdvisory("GHSA-2qrg-x229-3v8q")
 	if err != nil {
 		t.Errorf("%v", err)
 	}

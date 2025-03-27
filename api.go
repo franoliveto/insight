@@ -131,7 +131,7 @@ type Package struct {
 }
 
 // GetPackage returns information about a package, including a list of its available versions.
-func (c *Client) GetPackage(system, name string) (*Package, error) {
+func (c *Client) GetPackage(system string, name string) (*Package, error) {
 	path := "/systems/" + url.PathEscape(system) + "/packages/" + url.PathEscape(name)
 	var reply Package
 	if err := c.get(path, &reply); err != nil {
@@ -220,7 +220,7 @@ type Version struct {
 
 // GetVersion returns information about a specific package version, including its
 // licenses and any security advisories known to affect it.
-func (c *Client) GetVersion(system, name, version string) (*Version, error) {
+func (c *Client) GetVersion(system string, name string, version string) (*Version, error) {
 	path := "/systems/" + url.PathEscape(system) + "/packages/" + url.PathEscape(name) + "/versions/" + version
 	var reply Version
 	if err := c.get(path, &reply); err != nil {
@@ -299,8 +299,8 @@ type Dependencies struct {
 }
 
 // GetDependencies returns a resolved dependency graph for the given package version.
-func (c *Client) GetDependencies(key VersionKey) (*Dependencies, error) {
-	path := "/systems/" + url.PathEscape(key.System) + "/packages/" + url.PathEscape(key.Name) + "/versions/" + url.PathEscape(key.Version) + ":dependencies"
+func (c *Client) GetDependencies(system string, name string, version string) (*Dependencies, error) {
+	path := "/systems/" + url.PathEscape(system) + "/packages/" + url.PathEscape(name) + "/versions/" + url.PathEscape(version) + ":dependencies"
 	var reply Dependencies
 	if err := c.get(path, &reply); err != nil {
 		return nil, err
@@ -456,8 +456,8 @@ type ProjectPackageVersions struct {
 // and package versions.
 // At most 1500 package versions are returned. Mappings which were derived from
 // attestations are served first.
-func (c *Client) GetProjectPackageVersions(key ProjectKey) (*ProjectPackageVersions, error) {
-	path := "/projects/" + url.PathEscape(key.ID) + ":packageversions"
+func (c *Client) GetProjectPackageVersions(id string) (*ProjectPackageVersions, error) {
+	path := "/projects/" + url.PathEscape(id) + ":packageversions"
 	var reply ProjectPackageVersions
 	if err := c.get(path, &reply); err != nil {
 		return nil, err
@@ -487,8 +487,8 @@ type Advisory struct {
 	CVSS3Vector string
 }
 
-func (c *Client) GetAdvisory(key AdvisoryKey) (*Advisory, error) {
-	path := "/advisories/" + url.PathEscape(key.ID)
+func (c *Client) GetAdvisory(id string) (*Advisory, error) {
+	path := "/advisories/" + url.PathEscape(id)
 	var reply Advisory
 	if err := c.get(path, &reply); err != nil {
 		return nil, err
