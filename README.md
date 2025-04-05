@@ -11,7 +11,8 @@ client := insight.NewClient()
 Then use that client to interact with the API.
 
 ```go
-deps, err := client.GetDependencies("npm", "react", "18.2.0")
+ctx := context.Background()
+deps, err := client.GetDependencies(ctx, "npm", "react", "18.2.0")
 if err != nil {
     log.Fatal(err)
 }
