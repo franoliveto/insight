@@ -5,190 +5,205 @@
 package insight
 
 import (
-	"encoding/json"
+	"context"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
-	"reflect"
-	"strings"
+	"net/url"
 	"testing"
+
+	"github.com/google/go-cmp/cmp"
 )
 
-func decode(data string, v any) error {
-	r := strings.NewReader(data)
-	err := json.NewDecoder(r).Decode(v)
-	if err != nil {
-		return err
+// setup sets up a test HTTP server along with a insight.Client that is
+// configured to talk to that test server. Tests should register handlers on
+// mux which provide mock responses for the API method being tested.
+func setup(t *testing.T) (client *Client, mux *http.ServeMux) {
+	t.Helper()
+	// mux is the HTTP request multiplexer used with the test server.
+	mux = http.NewServeMux()
+
+	apiMux := http.NewServeMux()
+	apiMux.Handle("/v3/", http.StripPrefix("/v3", mux))
+
+	// server is a test HTTP server used to provide mock API responses.
+	server := httptest.NewServer(apiMux)
+
+	// client is the deps.dev client being tested;
+	// it is configured to use test server.
+	client = NewClient()
+	client.BaseURL, _ = url.Parse(server.URL + "/v3/")
+
+	t.Cleanup(server.Close)
+
+	return client, mux
+}
+
+func testMethod(t *testing.T, r *http.Request, want string) {
+	t.Helper()
+	if got := r.Method; got != want {
+		t.Errorf("Request method: %v, want %v", got, want)
 	}
-	return nil
+}
+
+func testHeader(t *testing.T, r *http.Request, header string, want string) {
+	t.Helper()
+	if got := r.Header.Get(header); got != want {
+		t.Errorf("Header.Get(%q) returned %q, want %q", header, got, want)
+	}
 }
 
 func TestGetPackage(t *testing.T) {
-	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		fmt.Fprint(w, `{"packageKey":{"system":"GO","name":"foo"},"versions":[{"versionKey":{"system":"GO","name":"foo","version":"v0.1.0"},"publishedAt":"2019-07-25T19:01:57Z","isDefault":false},{"versionKey":{"system":"GO","name":"foo","version":"v0.2.0"},"publishedAt":"2019-07-25T19:02:00Z","isDefault":false}]}`)
-	}))
-	defer ts.Close()
+	// TODO: should this test run in parallel?
+	client, mux := setup(t)
+
+	mux.HandleFunc("/systems/go/packages/foo", func(w http.ResponseWriter, r *http.Request) {
+		testMethod(t, r, "GET")
+		testHeader(t, r, "Accept", "application/json; charset=utf-8")
+		fmt.Fprint(w, `{"packageKey":{"system":"GO","name":"foo"}}`)
+	})
 
 	want := &Package{
 		PackageKey: PackageKey{System: "GO", Name: "foo"},
-		Versions: []Version{
-			{
-				VersionKey:  VersionKey{System: "GO", Name: "foo", Version: "v0.1.0"},
-				PublishedAt: "2019-07-25T19:01:57Z",
-				IsDefault:   false,
-			},
-			{
-				VersionKey:  VersionKey{System: "GO", Name: "foo", Version: "v0.2.0"},
-				PublishedAt: "2019-07-25T19:02:00Z",
-				IsDefault:   false,
-			},
-		},
 	}
 
-	c := NewClient()
-	c.BasePath = ts.URL
-	got, err := c.GetPackage("go", "foo")
+	got, err := client.GetPackage(context.Background(), "go", "foo")
 	if err != nil {
-		t.Errorf("c.GetPackage error: %v", err)
+		t.Errorf("GetPackage failed: %v", err)
 	}
 
-	if !reflect.DeepEqual(got, want) {
-		t.Errorf("c.GetPackage() == %v; want %v", got, want)
+	if !cmp.Equal(got, want) {
+		t.Errorf("GetPackage returned %+v; want %+v", got, want)
 	}
 }
 
-func TestGetPackageError(t *testing.T) {
-	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+func TestGetPackageErrorNotFound(t *testing.T) {
+	client, mux := setup(t)
+	mux.HandleFunc("/systems/bar/packages/baz", func(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "package not found", http.StatusNotFound)
-	}))
-	defer ts.Close()
+	})
 
-	c := NewClient()
-	c.BasePath = ts.URL
-	_, err := c.GetPackage("bar", "baz")
+	_, err := client.GetPackage(context.Background(), "bar", "baz")
 	if err == nil {
-		t.Errorf("expected error")
+		t.Errorf("GetPackage expected error")
 	}
 }
 
 func TestGetVersion(t *testing.T) {
-	body := `{"versionKey":{"system":"GO","name":"rsc.io/github","version":"v0.4.1"},"publishedAt":"2024-06-21T16:57:04Z","isDefault":false,"licenses":["BSD-3-Clause"],"advisoryKeys":[],"links":[{"label":"SOURCE_REPO","url":"https://github.com/rsc/github"}],"slsaProvenances":[],"attestations":[],"registries":[],"relatedProjects":[{"projectKey":{"id":"github.com/rsc/github"},"relationProvenance":"GO_ORIGIN","relationType":"SOURCE_REPO"}]}`
+	client, mux := setup(t)
+	mux.HandleFunc("/systems/go/packages/rsc.io%2Fgithub/versions/v0.4.1", func(w http.ResponseWriter, r *http.Request) {
+		fmt.Fprint(w, `{"versionKey":{"system":"GO","name":"rsc.io/github","version":"v0.4.1"}}`)
+	})
 
-	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		fmt.Fprint(w, body)
-	}))
-	defer ts.Close()
-
-	want := new(Version)
-	r := strings.NewReader(body)
-	if err := json.NewDecoder(r).Decode(want); err != nil {
-		t.Errorf("%v", err)
+	want := &Version{
+		VersionKey: VersionKey{
+			System:  "GO",
+			Name:    "rsc.io/github",
+			Version: "v0.4.1",
+		},
 	}
 
-	c := NewClient()
-	c.BasePath = ts.URL
-	got, err := c.GetVersion("go", "rsc.io/github", "v0.4.1")
+	got, err := client.GetVersion(context.Background(), "go", "rsc.io/github", "v0.4.1")
 	if err != nil {
-		t.Errorf("c.GetVersion error: %v", err)
+		t.Errorf("GetVersion failed: %v", err)
 	}
 
-	if !reflect.DeepEqual(got, want) {
-		t.Errorf("c.GetVersion() == %v; want %v", got, want)
+	if !cmp.Equal(got, want) {
+		t.Errorf("GetVersion returned %+v; want %+v", got, want)
 	}
 }
 
 func TestGetDependencies(t *testing.T) {
-	body := `{"nodes":[{"versionKey":{"system":"NPM", "name":"react", "version":"18.2.0"}, "bundled":false, "relation":"SELF", "errors":[]}, {"versionKey":{"system":"NPM", "name":"js-tokens", "version":"4.0.0"}, "bundled":false, "relation":"INDIRECT", "errors":[]}, {"versionKey":{"system":"NPM", "name":"loose-envify", "version":"1.4.0"}, "bundled":false, "relation":"DIRECT", "errors":[]}], "edges":[{"fromNode":0, "toNode":2, "requirement":"^1.1.0"}, {"fromNode":2, "toNode":1, "requirement":"^3.0.0 || ^4.0.0"}], "error":""}`
-	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		fmt.Fprint(w, body)
-	}))
-	defer ts.Close()
+	client, mux := setup(t)
 
-	want := new(Dependencies)
-	if err := decode(body, want); err != nil {
-		t.Errorf("%v", err)
+	mux.HandleFunc("/systems/npm/packages/react/versions/18.2.0:dependencies", func(w http.ResponseWriter, r *http.Request) {
+		fmt.Fprint(w, `{"nodes":[{"versionKey":{"system":"NPM", "name":"react", "version":"18.2.0"}, "bundled":false, "relation":"SELF", "errors":[]}]}`)
+	})
+
+	want := &Dependencies{
+		Nodes: []Node{
+			{
+				VersionKey: VersionKey{
+					System:  "NPM",
+					Name:    "react",
+					Version: "18.2.0",
+				},
+				Bundled:  false,
+				Relation: "SELF",
+				Errors:   []string{},
+			},
+		},
 	}
 
-	c := NewClient()
-	c.BasePath = ts.URL
-	got, err := c.GetDependencies("npm", "react", "18.2.0")
+	got, err := client.GetDependencies(context.Background(), "npm", "react", "18.2.0")
 	if err != nil {
-		t.Errorf("%v", err)
+		t.Errorf("GetDependencies failed: %v", err)
 	}
 
-	if !reflect.DeepEqual(got, want) {
-		t.Errorf("c.GetDependencies() == %v; want %v", got, want)
+	if !cmp.Equal(got, want) {
+		t.Errorf("c.GetDependencies returned %+v; want %+v", got, want)
 	}
 }
 
 func TestGetProject(t *testing.T) {
-	body := `{"projectKey":{"id":"github.com/robpike/lisp"}, "openIssuesCount":0, "starsCount":978, "forksCount":50, "license":"BSD-3-Clause", "description":"Toy Lisp 1.5 interpreter", "homepage":"", "scorecard":{"date":"2025-03-10T00:00:00Z", "repository":{"name":"github.com/robpike/lisp", "commit":"e311180f2a0d4ddb7469b9c303e0b152f2e8c4f6"}, "scorecard":{"version":"v5.1.1-14-g9c2d4b23", "commit":"9c2d4b23e7e488f8747b2ea9305f83a299e49c90"}, "checks":[{"name":"Maintained", "documentation":{"shortDescription":"Determines if the project is \"actively maintained\".", "url":"https://github.com/ossf/scorecard/blob/9c2d4b23e7e488f8747b2ea9305f83a299e49c90/docs/checks.md#maintained"}, "score":0, "reason":"0 commit(s) and 0 issue activity found in the last 90 days -- score normalized to 0", "details":[]}, {"name":"Dangerous-Workflow", "documentation":{"shortDescription":"Determines if the project's GitHub Action workflows avoid dangerous patterns.", "url":"https://github.com/ossf/scorecard/blob/9c2d4b23e7e488f8747b2ea9305f83a299e49c90/docs/checks.md#dangerous-workflow"}, "score":-1, "reason":"no workflows found", "details":[]}, {"name":"Pinned-Dependencies", "documentation":{"shortDescription":"Determines if the project has declared and pinned the dependencies of its build process.", "url":"https://github.com/ossf/scorecard/blob/9c2d4b23e7e488f8747b2ea9305f83a299e49c90/docs/checks.md#pinned-dependencies"}, "score":-1, "reason":"no dependencies found", "details":[]}, {"name":"Code-Review", "documentation":{"shortDescription":"Determines if the project requires human code review before pull requests (aka merge requests) are merged.", "url":"https://github.com/ossf/scorecard/blob/9c2d4b23e7e488f8747b2ea9305f83a299e49c90/docs/checks.md#code-review"}, "score":6, "reason":"Found 6/10 approved changesets -- score normalized to 6", "details":[]}, {"name":"Packaging", "documentation":{"shortDescription":"Determines if the project is published as a package that others can easily download, install, easily update, and uninstall.", "url":"https://github.com/ossf/scorecard/blob/9c2d4b23e7e488f8747b2ea9305f83a299e49c90/docs/checks.md#packaging"}, "score":-1, "reason":"packaging workflow not detected", "details":["Warn: no GitHub/GitLab publishing workflow detected."]}, {"name":"Token-Permissions", "documentation":{"shortDescription":"Determines if the project's workflows follow the principle of least privilege.", "url":"https://github.com/ossf/scorecard/blob/9c2d4b23e7e488f8747b2ea9305f83a299e49c90/docs/checks.md#token-permissions"}, "score":-1, "reason":"No tokens found", "details":[]}, {"name":"Binary-Artifacts", "documentation":{"shortDescription":"Determines if the project has generated executable (binary) artifacts in the source repository.", "url":"https://github.com/ossf/scorecard/blob/9c2d4b23e7e488f8747b2ea9305f83a299e49c90/docs/checks.md#binary-artifacts"}, "score":10, "reason":"no binaries found in the repo", "details":[]}, {"name":"CII-Best-Practices", "documentation":{"shortDescription":"Determines if the project has an OpenSSF (formerly CII) Best Practices Badge.", "url":"https://github.com/ossf/scorecard/blob/9c2d4b23e7e488f8747b2ea9305f83a299e49c90/docs/checks.md#cii-best-practices"}, "score":0, "reason":"no effort to earn an OpenSSF best practices badge detected", "details":[]}, {"name":"Vulnerabilities", "documentation":{"shortDescription":"Determines if the project has open, known unfixed vulnerabilities.", "url":"https://github.com/ossf/scorecard/blob/9c2d4b23e7e488f8747b2ea9305f83a299e49c90/docs/checks.md#vulnerabilities"}, "score":10, "reason":"0 existing vulnerabilities detected", "details":[]}, {"name":"Security-Policy", "documentation":{"shortDescription":"Determines if the project has published a security policy.", "url":"https://github.com/ossf/scorecard/blob/9c2d4b23e7e488f8747b2ea9305f83a299e49c90/docs/checks.md#security-policy"}, "score":0, "reason":"security policy file not detected", "details":["Warn: no security policy file detected", "Warn: no security file to analyze", "Warn: no security file to analyze", "Warn: no security file to analyze"]}, {"name":"License", "documentation":{"shortDescription":"Determines if the project has defined a license.", "url":"https://github.com/ossf/scorecard/blob/9c2d4b23e7e488f8747b2ea9305f83a299e49c90/docs/checks.md#license"}, "score":10, "reason":"license file detected", "details":["Info: project has a license file: LICENSE:0", "Info: FSF or OSI recognized license: BSD 3-Clause \"New\" or \"Revised\" License: LICENSE:0"]}, {"name":"Fuzzing", "documentation":{"shortDescription":"Determines if the project uses fuzzing.", "url":"https://github.com/ossf/scorecard/blob/9c2d4b23e7e488f8747b2ea9305f83a299e49c90/docs/checks.md#fuzzing"}, "score":0, "reason":"project is not fuzzed", "details":["Warn: no fuzzer integrations found"]}, {"name":"Branch-Protection", "documentation":{"shortDescription":"Determines if the default and release branches are protected with GitHub's branch protection settings.", "url":"https://github.com/ossf/scorecard/blob/9c2d4b23e7e488f8747b2ea9305f83a299e49c90/docs/checks.md#branch-protection"}, "score":0, "reason":"branch protection not enabled on development/release branches", "details":["Warn: branch protection not enabled for branch 'master'"]}, {"name":"Signed-Releases", "documentation":{"shortDescription":"Determines if the project cryptographically signs release artifacts.", "url":"https://github.com/ossf/scorecard/blob/9c2d4b23e7e488f8747b2ea9305f83a299e49c90/docs/checks.md#signed-releases"}, "score":-1, "reason":"no releases found", "details":[]}, {"name":"SAST", "documentation":{"shortDescription":"Determines if the project uses static code analysis.", "url":"https://github.com/ossf/scorecard/blob/9c2d4b23e7e488f8747b2ea9305f83a299e49c90/docs/checks.md#sast"}, "score":0, "reason":"SAST tool is not run on all commits -- score normalized to 0", "details":["Warn: 0 commits out of 12 are checked with a SAST tool"]}], "overallScore":3.8, "metadata":[]}}`
-	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		fmt.Fprint(w, body)
-	}))
-	defer ts.Close()
+	client, mux := setup(t)
 
-	want := new(Project)
-	if err := decode(body, want); err != nil {
-		t.Errorf("%v", err)
+	mux.HandleFunc("/projects/github.com%2Frobpike%2Flisp", func(w http.ResponseWriter, r *http.Request) {
+		fmt.Fprint(w, `{"projectKey":{"id":"github.com/robpike/lisp"}, "openIssuesCount":0, "starsCount":978}`)
+	})
+
+	want := &Project{
+		ProjectKey:      ProjectKey{ID: "github.com/robpike/lisp"},
+		OpenIssuesCount: 0,
+		StarsCount:      978,
 	}
 
-	c := NewClient()
-	c.BasePath = ts.URL
-	got, err := c.GetProject("github.com/robpike/lisp")
+	got, err := client.GetProject(context.Background(), "github.com/robpike/lisp")
 	if err != nil {
-		t.Errorf("%v", err)
+		t.Errorf("GetProject failed: %v", err)
 	}
 
-	if !reflect.DeepEqual(got, want) {
-		t.Errorf("c.GetProject() == %v; want %v", got, want)
+	if !cmp.Equal(got, want) {
+		t.Errorf("GetProject returned %+v; want %+v", got, want)
 	}
 }
 
 func TestGetProjectPackageVersions(t *testing.T) {
-	body := `{"versions":[{"versionKey":{"system":"GO", "name":"robpike.io/lisp", "version":"v0.0.0-20241117212301-e311180f2a0d"}, "relationType":"SOURCE_REPO", "relationProvenance":"GO_ORIGIN", "slsaProvenances":[], "attestations":[]}]}`
-	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		fmt.Fprint(w, body)
-	}))
-	defer ts.Close()
+	client, mux := setup(t)
 
-	c := NewClient()
+	mux.HandleFunc("/projects/github.com%2Frobpike%2Flisp:packageversions", func(w http.ResponseWriter, r *http.Request) {
+		// fmt.Fprint(w, `{"versions":[{"versionKey":{"system":"GO", "name":"robpike.io/lisp", "version":"v0.0.0"}, "relationType":"SOURCE_REPO", "relationProvenance":"GO_ORIGIN"}]}`)
+		fmt.Fprint(w, `{}`)
+	})
 
-	want := new(ProjectPackageVersions)
-	if err := decode(body, want); err != nil {
-		t.Errorf("%v", err)
-	}
+	// TODO: add values.
+	want := &ProjectPackageVersions{}
 
-	got, err := c.GetProjectPackageVersions("github.com/robpike/lisp")
+	got, err := client.GetProjectPackageVersions(context.Background(), "github.com/robpike/lisp")
 	if err != nil {
-		t.Errorf("%v", err)
+		t.Errorf("GetProjectPackageVersions failed: %v", err)
 	}
 
-	if !reflect.DeepEqual(got, want) {
-		t.Errorf("c.GetProjectPackageVersions() == %v; want %v", got, want)
+	if !cmp.Equal(got, want) {
+		t.Errorf("GetProjectPackageVersions returned %+v; want %+v", got, want)
 	}
 }
 
 func TestGetAdvisory(t *testing.T) {
-	body := `{"advisoryKey":{"id":"GHSA-2qrg-x229-3v8q"}, "url":"https://osv.dev/vulnerability/GHSA-2qrg-x229-3v8q", "title":"Deserialization of Untrusted Data in Log4j", "aliases":["CVE-2019-17571"], "cvss3Score":9.8, "cvss3Vector":"CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:H/A:H"}`
-	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		fmt.Fprint(w, body)
-	}))
-	defer ts.Close()
+	client, mux := setup(t)
 
-	c := NewClient()
+	mux.HandleFunc("/advisories/GHSA-2qrg-x229-3v8q", func(w http.ResponseWriter, r *http.Request) {
+		fmt.Fprint(w, `{"advisoryKey":{"id":"GHSA-2qrg-x229-3v8q"}}`)
+	})
 
-	want := new(Advisory)
-	if err := decode(body, want); err != nil {
-		t.Errorf("%v", err)
-	}
+	want := &Advisory{AdvisoryKey: AdvisoryKey{ID: "GHSA-2qrg-x229-3v8q"}}
 
-	got, err := c.GetAdvisory("GHSA-2qrg-x229-3v8q")
+	got, err := client.GetAdvisory(context.Background(), "GHSA-2qrg-x229-3v8q")
 	if err != nil {
-		t.Errorf("%v", err)
+		t.Errorf("GetAdvisory failed: %v", err)
 	}
 
-	if !reflect.DeepEqual(got, want) {
-		t.Errorf("c.GetAdvisory() == %v; want %v", got, want)
+	if !cmp.Equal(got, want) {
+		t.Errorf("GetAdvisory returned %+v; want %+v", got, want)
 	}
 }

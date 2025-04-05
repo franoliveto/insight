@@ -5,6 +5,8 @@
 package insight
 
 import (
+	"context"
+	"fmt"
 	"net/url"
 )
 
@@ -106,14 +108,16 @@ type Package struct {
 	Versions []Version
 }
 
-// GetPackage returns information about a package, including a list of its available versions.
-func (c *Client) GetPackage(system string, name string) (*Package, error) {
-	path := "/systems/" + url.PathEscape(system) + "/packages/" + url.PathEscape(name)
-	var reply Package
-	if err := c.get(path, &reply); err != nil {
+// GetPackage returns information about a package.
+//
+// deps.dev API doc: https://docs.deps.dev/api/v3/#getpackage
+func (c *Client) GetPackage(ctx context.Context, system string, name string) (*Package, error) {
+	path := fmt.Sprintf("systems/%s/packages/%s", url.PathEscape(system), url.PathEscape(name))
+	p := new(Package)
+	if err := c.get(ctx, path, p); err != nil {
 		return nil, err
 	}
-	return &reply, nil
+	return p, nil
 }
 
 // Version holds information about a package version.
@@ -194,15 +198,16 @@ type Version struct {
 	}
 }
 
-// GetVersion returns information about a specific package version, including its
-// licenses and any security advisories known to affect it.
-func (c *Client) GetVersion(system string, name string, version string) (*Version, error) {
-	path := "/systems/" + url.PathEscape(system) + "/packages/" + url.PathEscape(name) + "/versions/" + version
-	var reply Version
-	if err := c.get(path, &reply); err != nil {
+// GetVersion returns information about a specific package version.
+//
+// deps.dev API doc: https://docs.deps.dev/api/v3/#getversion
+func (c *Client) GetVersion(ctx context.Context, system, name, version string) (*Version, error) {
+	path := fmt.Sprintf("systems/%s/packages/%s/versions/%s", url.PathEscape(system), url.PathEscape(name), url.PathEscape(version))
+	v := new(Version)
+	if err := c.get(ctx, path, v); err != nil {
 		return nil, err
 	}
-	return &reply, nil
+	return v, nil
 }
 
 // Node represents a node in a resolved dependency graph.
@@ -275,13 +280,15 @@ type Dependencies struct {
 }
 
 // GetDependencies returns a resolved dependency graph for the given package version.
-func (c *Client) GetDependencies(system string, name string, version string) (*Dependencies, error) {
-	path := "/systems/" + url.PathEscape(system) + "/packages/" + url.PathEscape(name) + "/versions/" + url.PathEscape(version) + ":dependencies"
-	var reply Dependencies
-	if err := c.get(path, &reply); err != nil {
+//
+// deps.dev API doc: https://docs.deps.dev/api/v3/#getdependencies
+func (c *Client) GetDependencies(ctx context.Context, system, name, version string) (*Dependencies, error) {
+	path := fmt.Sprintf("systems/%s/packages/%s/versions/%s:dependencies", url.PathEscape(system), url.PathEscape(name), url.PathEscape(version))
+	d := new(Dependencies)
+	if err := c.get(ctx, path, d); err != nil {
 		return nil, err
 	}
-	return &reply, nil
+	return d, nil
 }
 
 // Project holds information about a project hosted by GitHub, GitLab, or
@@ -396,15 +403,16 @@ type OSSFuzzDetails struct {
 	ConfigURL string
 }
 
-// GetProject returns information about projects hosted by GitHub, GitLab,
-// or BitBucket.
-func (c *Client) GetProject(id string) (*Project, error) {
-	path := "/projects/" + url.PathEscape(id)
-	var reply Project
-	if err := c.get(path, &reply); err != nil {
+// GetProject returns information about projects hosted by GitHub, GitLab, or BitBucket.
+//
+// deps.dev API doc: https://docs.deps.dev/api/v3/#getproject
+func (c *Client) GetProject(ctx context.Context, id string) (*Project, error) {
+	path := fmt.Sprintf("projects/%s", url.PathEscape(id))
+	p := new(Project)
+	if err := c.get(ctx, path, p); err != nil {
 		return nil, err
 	}
-	return &reply, nil
+	return p, nil
 }
 
 type ProjectPackageVersions struct {
@@ -430,15 +438,15 @@ type ProjectPackageVersions struct {
 
 // GetProjectPackageVersions returns known mappings between the requested project
 // and package versions.
-// At most 1500 package versions are returned. Mappings which were derived from
-// attestations are served first.
-func (c *Client) GetProjectPackageVersions(id string) (*ProjectPackageVersions, error) {
-	path := "/projects/" + url.PathEscape(id) + ":packageversions"
-	var reply ProjectPackageVersions
-	if err := c.get(path, &reply); err != nil {
+//
+// deps.dev API doc: https://docs.deps.dev/api/v3/#getprojectpackageversions
+func (c *Client) GetProjectPackageVersions(ctx context.Context, id string) (*ProjectPackageVersions, error) {
+	path := fmt.Sprintf("/projects/%s:packageversions", url.PathEscape(id))
+	pv := new(ProjectPackageVersions)
+	if err := c.get(ctx, path, pv); err != nil {
 		return nil, err
 	}
-	return &reply, nil
+	return pv, nil
 }
 
 // Advisory holds information about a security advisory hosted by OSV.
@@ -455,7 +463,7 @@ type Advisory struct {
 	// Other identifiers used for the advisory, including CVEs.
 	Aliases []string
 
-	// he severity of the advisory as a CVSS v3 score in the range [0,10].
+	// The severity of the advisory as a CVSS v3 score in the range [0,10].
 	// A higher score represents greater severity.
 	CVSS3Score float32
 
@@ -463,11 +471,14 @@ type Advisory struct {
 	CVSS3Vector string
 }
 
-func (c *Client) GetAdvisory(id string) (*Advisory, error) {
-	path := "/advisories/" + url.PathEscape(id)
-	var reply Advisory
-	if err := c.get(path, &reply); err != nil {
+// GetAdvisory returns information about security advisories hosted by OSV.
+//
+// deps.dev API doc: https://docs.deps.dev/api/v3/#getadvisory
+func (c *Client) GetAdvisory(ctx context.Context, id string) (*Advisory, error) {
+	path := fmt.Sprintf("/advisories/%s", url.PathEscape(id))
+	a := new(Advisory)
+	if err := c.get(ctx, path, a); err != nil {
 		return nil, err
 	}
-	return &reply, nil
+	return a, nil
 }
