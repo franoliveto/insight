@@ -1,6 +1,7 @@
 This is currently a work in progress.
 
-Package insight provides idiomatic Go APIs for accessing [deps.dev API v3](https://docs.deps.dev/api/v3/).
+Package insight provides idiomatic Go APIs for accessing
+[deps.dev API v3](https://docs.deps.dev/api/v3/).
 
 First create a client.
 
