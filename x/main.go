@@ -10,11 +10,11 @@ import (
 	"log"
 	"os"
 
-	"github.com/franoliveto/insight"
+	"github.com/franoliveto/insights"
 )
 
-func doVersion(c *insight.Client, system, name, version string) error {
-	var v *insight.Version
+func doVersion(c *insights.Client, system, name, version string) error {
+	var v *insights.Version
 	v, err := c.GetVersion(system, name, version)
 	if err != nil {
 		return err
@@ -23,8 +23,8 @@ func doVersion(c *insight.Client, system, name, version string) error {
 	return nil
 }
 
-func doPackage(c *insight.Client, system, name string) error {
-	var p *insight.Package
+func doPackage(c *insights.Client, system, name string) error {
+	var p *insights.Package
 	p, err := c.GetPackage(system, name)
 	if err != nil {
 		return err
@@ -42,7 +42,7 @@ func main() {
 		os.Exit(1)
 	}
 
-	client := insight.NewClient()
+	client := insights.NewClient()
 
 	switch cmd := flag.Arg(0); cmd {
 	case "package":
@@ -74,7 +74,7 @@ func main() {
 		system := flag.Arg(1)
 		name := flag.Arg(2)
 		version := flag.Arg(3)
-		d, err := client.GetDependencies(insight.VersionKey{System: system, Name: name, Version: version})
+		d, err := client.GetDependencies(insights.VersionKey{System: system, Name: name, Version: version})
 		if err != nil {
 			log.Fatal(err)
 		}

@@ -1,4 +1,4 @@
-module github.com/franoliveto/insight
+module github.com/franoliveto/insights
 
 go 1.22.4
 

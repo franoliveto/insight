@@ -2,7 +2,7 @@
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
-package insight
+package insights
 
 import (
 	"context"
@@ -15,7 +15,7 @@ import (
 	"github.com/google/go-cmp/cmp"
 )
 
-// setup sets up a test HTTP server along with a insight.Client that is
+// setup sets up a test HTTP server along with a insights.Client that is
 // configured to talk to that test server. Tests should register handlers on
 // mux which provide mock responses for the API method being tested.
 func setup(t *testing.T) (client *Client, mux *http.ServeMux) {
