@@ -482,3 +482,49 @@ func (c *Client) GetAdvisory(ctx context.Context, id string) (*Advisory, error) 
 	}
 	return a, nil
 }
+
+type Result struct {
+	Version Version
+}
+
+// QueryResult holds information about package versions matching the query.
+type QueryResult struct {
+	// Results matching the query. At most 1000 results are returned.
+	Results []Result
+}
+
+// QueryOptions specifies the optional parameters to the Query method.
+type QueryOptions struct {
+	// The function used to produce this hash.
+	// Can be one of MD5, SHA1, SHA256, SHA512.
+	HashType string `url:"hash.type,omitempty"`
+
+	// A hash value.
+	HashValue string `url:"hash.value,omitempty"`
+
+	// The package management system containing the package.
+	// Can be one of GO, NPM, CARGO, MAVEN, PYPI, NUGET.
+	System string `url:"versionKey.system,omitempty"`
+
+	// The name of the package.
+	Name string `url:"versionKey.name,omitempty"`
+
+	// The version of the package.
+	Version string `url:"versionKey.version,omitempty"`
+}
+
+// Query returns information about multiple package versions.
+//
+// deps.dev API doc: https://docs.deps.dev/api/v3/#query
+func (c *Client) Query(ctx context.Context, opts *QueryOptions) (*QueryResult, error) {
+	u := "query"
+	path, err := addOptions(u, opts)
+	if err != nil {
+		return nil, err
+	}
+	r := new(QueryResult)
+	if err := c.get(ctx, path, r); err != nil {
+		return nil, err
+	}
+	return r, nil
+}

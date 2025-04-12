@@ -8,3 +8,5 @@ func TestNewClient(t *testing.T) {
 		t.Errorf("NewClient BaseURL is %v, want %v", got, want)
 	}
 }
+
+// TODO: add test for Client.get method.

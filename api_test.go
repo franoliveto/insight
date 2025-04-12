@@ -53,6 +53,13 @@ func testHeader(t *testing.T, r *http.Request, header string, want string) {
 	}
 }
 
+func testQueryParameter(t *testing.T, r *http.Request, key string, want string) {
+	t.Helper()
+	if got := r.FormValue(key); got != want {
+		t.Errorf("FormValue(%q) returned %q, want %q", key, got, want)
+	}
+}
+
 func TestGetPackage(t *testing.T) {
 	// TODO: should this test run in parallel?
 	client, mux := setup(t)
@@ -205,5 +212,38 @@ func TestGetAdvisory(t *testing.T) {
 
 	if !cmp.Equal(got, want) {
 		t.Errorf("GetAdvisory returned %+v; want %+v", got, want)
+	}
+}
+
+func TestQuery(t *testing.T) {
+	client, mux := setup(t)
+
+	mux.HandleFunc("/query", func(w http.ResponseWriter, r *http.Request) {
+		testMethod(t, r, "GET")
+		testHeader(t, r, "Accept", "application/json; charset=utf-8")
+		testQueryParameter(t, r, "versionKey.system", "npm")
+		testQueryParameter(t, r, "versionKey.name", "react")
+		testQueryParameter(t, r, "versionKey.version", "18.2.0")
+		fmt.Fprint(w, `{"results":[{"version":{"versionKey":{"system":"NPM", "name":"react", "version":"18.2.0"}}}]}`)
+	})
+
+	want := &QueryResult{
+		Results: []Result{{
+			Version{VersionKey: VersionKey{
+				System:  "NPM",
+				Name:    "react",
+				Version: "18.2.0",
+			}},
+		}},
+	}
+
+	opts := &QueryOptions{System: "npm", Name: "react", Version: "18.2.0"}
+	got, err := client.Query(context.Background(), opts)
+	if err != nil {
+		t.Errorf("Query failed: %v", err)
+	}
+
+	if !cmp.Equal(got, want) {
+		t.Errorf("Query returned %+v; want %+v", got, want)
 	}
 }
